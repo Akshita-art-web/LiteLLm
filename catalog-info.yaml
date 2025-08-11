@@ -1,0 +1,14 @@
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: langfuse-infra
+  title: Langfuse Infra Setup
+  description: Docker Compose and Proxy configuration for Langfuse observability stack
+  annotations:
+    backstage.io/source-location: url:https://github.com/Akshita-art-web/LiteLLm
+    backstage.io/view-url: https://github.com/Akshita-art-web/LiteLLm/blob/main
+    backstage.io/edit-url: https://github.com/Akshita-art-web/LiteLLm/edit/main
+spec:
+  type: service
+  owner: platform-team
+  lifecycle: experimental

@@ -1,0 +1,19 @@
+model_list:
+  - model_name: ollama-codellama
+    litellm_params:
+      model: ollama/codellama:7b
+      api_base: http://ollama:11434
+      rpm: 1440
+    model_info: 
+      version: 2                     # Ollama needs no key
+
+general_settings:
+  master_key: sk-ADMINKEY
+  database_url: postgresql://litellm:litellm@litellm_db:5432/litellm
+  store_model_in_db: true
+  store_prompts_in_spend_logs: true
+
+litellm_settings:
+  callbacks: ["prometheus"]
+  drop_params: True
+  set_verbose: True

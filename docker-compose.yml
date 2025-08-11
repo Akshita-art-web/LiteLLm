@@ -1,0 +1,228 @@
+services:
+  # ─────────────────────────── SHARED POSTGRES ───────────────────────────
+  postgres:
+    image: postgres:16
+    container_name: postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres            # CHANGEME (use a real password)
+      POSTGRES_DB: postgres
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL","pg_isready -U postgres"]
+      interval: 5s
+      retries: 10
+    # Expose only to localhost; both apps talk via the docker network
+    ports:
+      - 127.0.0.1:5432:5432
+    networks: [ litellm_shared ]
+
+  # ───────────────────────────── OLLAMA ─────────────────────────────
+  ollama:
+    image: ollama/ollama
+    container_name: ollama
+    volumes:
+      - ollama:/root/.ollama
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    networks: [ litellm_shared ]
+
+  # ───────────────────────────── LITELLM ────────────────────────────
+  litellm:
+    image: ghcr.io/berriai/litellm:main-latest
+    container_name: litellm
+    depends_on:
+      postgres:
+        condition: service_healthy
+      ollama:
+        condition: service_started
+    environment:
+      # Debug / OTEL
+      OTEL_DEBUG: "true"
+
+      # Langfuse self-host (internal URL). Fill keys after you create/initialize Langfuse.
+      LANGFUSE_PUBLIC_KEY: "pk-lf-f56acfdb-c798-4f6e-93ff-2bf7bb90b1aa"     # from Langfuse → Project → Settings
+      LANGFUSE_SECRET_KEY: "sk-lf-f32a8356-cd38-4b0a-8b4c-996cd515fc52"
+      LANGFUSE_HOST: "http://langfuse-web:3000"
+    ports:
+      - "4000:4000"
+    volumes:
+      - ./proxy_config.yaml:/app/config.yaml:ro
+    command: [ "--config", "/app/config.yaml", "--port", "4000", "--num_workers", "6" ]
+    networks: [ litellm_shared ]
+
+  # ───────────────────────────── LANGFUSE ───────────────────────────
+  langfuse-worker:
+    image: docker.io/langfuse/langfuse-worker:3
+    container_name: langfuse-worker
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+    environment: &langfuse-env
+      NEXTAUTH_URL: http://langfuse-web:3000
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/langfuse
+      DIRECT_URL:   postgresql://postgres:postgres@postgres:5432/langfuse
+      SALT: "mysalt" # CHANGEME
+      ENCRYPTION_KEY: "0000000000000000000000000000000000000000000000000000000000000000" # CHANGEME (openssl rand -hex 32)
+      TELEMETRY_ENABLED: "true"
+      LANGFUSE_ENABLE_EXPERIMENTAL_FEATURES: "true"
+      CLICKHOUSE_MIGRATION_URL: clickhouse://clickhouse:9000
+      CLICKHOUSE_URL: http://clickhouse:8123
+      CLICKHOUSE_USER: clickhouse
+      CLICKHOUSE_PASSWORD: clickhouse # CHANGEME
+      CLICKHOUSE_CLUSTER_ENABLED: "false"
+
+      # Event & media storage (internal endpoints!)
+      LANGFUSE_S3_EVENT_UPLOAD_BUCKET: langfuse
+      LANGFUSE_S3_EVENT_UPLOAD_REGION: auto
+      LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID: minio
+      LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY: miniosecret # CHANGEME
+      LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT: http://minio:9000
+      LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE: "true"
+      LANGFUSE_S3_EVENT_UPLOAD_PREFIX: events/
+
+      LANGFUSE_S3_MEDIA_UPLOAD_BUCKET: langfuse
+      LANGFUSE_S3_MEDIA_UPLOAD_REGION: auto
+      LANGFUSE_S3_MEDIA_UPLOAD_ACCESS_KEY_ID: minio
+      LANGFUSE_S3_MEDIA_UPLOAD_SECRET_ACCESS_KEY: miniosecret # CHANGEME
+      LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT: http://minio:9000    # fixed from localhost
+      LANGFUSE_S3_MEDIA_UPLOAD_FORCE_PATH_STYLE: "true"
+      LANGFUSE_S3_MEDIA_UPLOAD_PREFIX: media/
+
+      # Optional batch export
+      LANGFUSE_S3_BATCH_EXPORT_ENABLED: "false"
+      LANGFUSE_S3_BATCH_EXPORT_BUCKET: langfuse
+      LANGFUSE_S3_BATCH_EXPORT_PREFIX: exports/
+      LANGFUSE_S3_BATCH_EXPORT_REGION: auto
+      LANGFUSE_S3_BATCH_EXPORT_ENDPOINT: http://minio:9000
+      LANGFUSE_S3_BATCH_EXPORT_EXTERNAL_ENDPOINT: http://localhost:9090
+      LANGFUSE_S3_BATCH_EXPORT_ACCESS_KEY_ID: minio
+      LANGFUSE_S3_BATCH_EXPORT_SECRET_ACCESS_KEY: miniosecret # CHANGEME
+      LANGFUSE_S3_BATCH_EXPORT_FORCE_PATH_STYLE: "true"
+
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_AUTH: myredissecret # CHANGEME
+      REDIS_TLS_ENABLED: "false"
+
+      EMAIL_FROM_ADDRESS:
+      SMTP_CONNECTION_URL:
+    ports:
+      - 127.0.0.1:3030:3030
+    networks: [ litellm_shared ]
+
+  langfuse-web:
+    image: docker.io/langfuse/langfuse:3
+    container_name: langfuse-web
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+    environment:
+      <<: *langfuse-env
+      NEXTAUTH_SECRET: mysecret # CHANGEME
+
+      # (Optional) Headless init to auto-create org/project/user + API keys on first boot.
+      # Fill these to avoid manual setup, then copy the generated PUBLIC/SECRET keys into LiteLLM env above.
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/langfuse
+      DIRECT_URL:   postgresql://postgres:postgres@postgres:5432/langfuse
+      LANGFUSE_INIT_ORG_ID:
+      LANGFUSE_INIT_ORG_NAME:
+      LANGFUSE_INIT_PROJECT_ID:
+      LANGFUSE_INIT_PROJECT_NAME:
+      LANGFUSE_INIT_PROJECT_PUBLIC_KEY:
+      LANGFUSE_INIT_PROJECT_SECRET_KEY:
+      LANGFUSE_INIT_USER_EMAIL:
+      LANGFUSE_INIT_USER_NAME:
+      LANGFUSE_INIT_USER_PASSWORD:
+    ports:
+      - "3000:3000"
+    networks: [ litellm_shared ]
+
+  clickhouse:
+    image: docker.io/clickhouse/clickhouse-server
+    container_name: clickhouse
+    restart: always
+    user: "101:101"
+    environment:
+      CLICKHOUSE_DB: default
+      CLICKHOUSE_USER: clickhouse
+      CLICKHOUSE_PASSWORD: clickhouse # CHANGEME
+    volumes:
+      - ch_data:/var/lib/clickhouse
+      - ch_logs:/var/log/clickhouse-server
+    ports:
+      - 127.0.0.1:8123:8123
+      - 127.0.0.1:9000:9000
+    healthcheck:
+      test: wget --no-verbose --tries=1 --spider http://localhost:8123/ping || exit 1
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 1s
+    networks: [ litellm_shared ]
+
+  minio:
+    image: docker.io/minio/minio
+    container_name: minio
+    restart: always
+    entrypoint: sh
+    command: -c 'mkdir -p /data/langfuse && minio server --address ":9000" --console-address ":9001" /data'
+    environment:
+      MINIO_ROOT_USER: minio
+      MINIO_ROOT_PASSWORD: miniosecret # CHANGEME
+    ports:
+      - "9090:9000"              # S3 endpoint
+      - 127.0.0.1:9091:9001      # MinIO console
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 2s
+      timeout: 5s
+      retries: 10
+      start_period: 2s
+    networks: [ litellm_shared ]
+
+  redis:
+    image: docker.io/redis:7
+    container_name: redis
+    restart: always
+    command: >
+      --requirepass ${REDIS_AUTH:-myredissecret}
+    ports:
+      - 127.0.0.1:6379:6379
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_AUTH:-myredissecret}", "ping"]
+      interval: 3s
+      timeout: 10s
+      retries: 10
+    networks: [ litellm_shared ]
+
+# ───────────────────────────── VOLUMES & NETWORK ─────────────────────────────
+volumes:
+  ollama:
+  pg_data:
+  ch_data:
+  ch_logs:
+  minio_data:
+
+networks:
+  litellm_shared:
+    external: true
+

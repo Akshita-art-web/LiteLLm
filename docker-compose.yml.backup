@@ -1,0 +1,53 @@
+services:
+  litellm_db:
+    container_name: litellm_db
+    image: postgres:16
+    environment:
+      POSTGRES_DB:  litellm
+      POSTGRES_USER: litellm
+      POSTGRES_PASSWORD: litellm
+    volumes:
+      - litellm_db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL","pg_isready -U litellm"]
+      interval: 5s
+      retries: 5
+    ports:
+      - "5432:5432"
+
+  ollama:
+    container_name: ollama
+    image: ollama/ollama
+    # ipc: "host"                          
+    volumes:
+      - ollama:/root/.ollama
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+
+  litellm:
+    container_name: litellm
+    build:
+      context: .
+      args:
+        target: runtime
+    image: ghcr.io/berriai/litellm:main-latest
+    environment:
+      OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: https://api.traceloop.com/otel/v1/traces
+      OTEL_EXPORTER_OTLP_METRICS_ENDPOINT: https://api.traceloop.com/otel/v1/metrics
+      OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf          # OTLP-HTTP, not gRPC
+      OTEL_EXPORTER_OTLP_HEADERS: Authorization=Bearer tl_63716df86548448e96d0201d95b750d6
+      TRACELOOP_API_KEY: tl_63716df86548448e96d0201d95b750d6
+      TRACELOOP_BASE_URL: https://api.traceloop.com
+    ports:
+      - "4000:4000"
+    volumes:
+      - ./proxy_config.yaml:/app/config.yaml
+    command: [ "--config", "/app/config.yaml", "--port", "4000", "--num_workers", "6" ]
+    depends_on:
+      - ollama
+      - litellm_db
+
+volumes:
+  ollama:
+  litellm_db:

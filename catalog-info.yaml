@@ -5,6 +5,16 @@ metadata:
   title: LLM Observability
   description: LiteLLM + Ollama + Langfuse stack
   tags: [llm, observability, langfuse, litellm]
+  links:
+    - url: http://localhost:3000
+      title: Langfuse Dashboard
+      icon: dashboard
+    - url: http://localhost:4000/ui
+      title: LiteLLM UI
+      icon: developer-board
+    - url: https://github.com/your-org/llm-observability
+      title: Repository
+      icon: code
 spec:
   owner: platform-team
 ---
@@ -20,12 +30,12 @@ metadata:
     - url: http://localhost:3000
       title: Langfuse Dashboard
       icon: dashboard
-    # - url: https://github.com/your-org/llm-observability/blob/main/docker-compose.yml
-    #   title: docker-compose.yml
-    #   icon: code
-    # - url: https://github.com/your-org/llm-observability/blob/main/proxy_config.yaml
-    #   title: proxy_config.yaml
-    #   icon: settings
+    - url: https://github.com/your-org/llm-observability/blob/main/docker-compose.yml
+      title: docker-compose.yml
+      icon: code
+    - url: https://github.com/your-org/llm-observability/blob/main/proxy_config.yaml
+      title: proxy_config.yaml
+      icon: settings
   annotations:
     backstage.io/techdocs-ref: dir:.
 spec:

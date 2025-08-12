@@ -1,4 +1,3 @@
-# catalog-info.yaml
 apiVersion: backstage.io/v1alpha1
 kind: System
 metadata:
@@ -8,46 +7,42 @@ metadata:
   tags: [llm, observability, langfuse, litellm]
 spec:
   owner: platform-team
-
 ---
 apiVersion: backstage.io/v1alpha1
 kind: Component
 metadata:
   name: litellm-proxy
   description: OpenAI-compatible gateway in front of Ollama with Langfuse logging
+  links:
+    - url: http://localhost:4000/ui
+      title: LiteLLM UI
+      icon: developer-board
+    - url: http://localhost:3000
+      title: Langfuse Dashboard
+      icon: dashboard
+    # - url: https://github.com/your-org/llm-observability/blob/main/docker-compose.yml
+    #   title: docker-compose.yml
+    #   icon: code
+    # - url: https://github.com/your-org/llm-observability/blob/main/proxy_config.yaml
+    #   title: proxy_config.yaml
+    #   icon: settings
   annotations:
     backstage.io/techdocs-ref: dir:.
-    # Quick-launch links show up in the entity "Links" card
-    backstage.io/links: |
-      - url: http://localhost:4000/ui
-        title: LiteLLM UI
-        icon: developer-board
-      - url: http://localhost:3000
-        title: Langfuse Dashboard
-        icon: dashboard
-      - url: https://github.com/Akshita-art-web/LiteLLM/blob/main/docker-compose.yml
-        title: docker-compose.yml
-        icon: code
-      - url: https://github.com/Akshita-art-web/LiteLLM/blob/main/proxy_config.yaml
-        title: proxy_config.yaml
-        icon: settings
 spec:
   type: service
   lifecycle: production
   owner: platform-team
   system: llm-observability
-
 ---
 apiVersion: backstage.io/v1alpha1
 kind: Component
 metadata:
   name: langfuse-dashboard
   description: Langfuse web app for traces, metrics, and cost
-  annotations:
-    backstage.io/links: |
-      - url: http://localhost:3000
-        title: Open Langfuse
-        icon: dashboard
+  links:
+    - url: http://localhost:3000
+      title: Open Langfuse
+      icon: dashboard
 spec:
   type: website
   lifecycle: production
